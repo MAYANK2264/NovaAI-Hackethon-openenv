@@ -11,6 +11,8 @@ const TASKS = [
   { id: 'task_multi_shock_crisis', label: 'Hard: Multi-Shock' }
 ];
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
 const MOCK_STATE = {
   step: 1,
   task_id: "demo_mode",
@@ -46,14 +48,38 @@ export default function Dashboard() {
   const [autoRun, setAutoRun] = useState(false);
   const [stagedAction, setStagedAction] = useState(null);
   const [backendAlive, setBackendAlive] = useState(false);
+  const [backendStatus, setBackendStatus] = useState('Disconnected');
   const autoRunInterval = useRef(null);
 
   // Ping backend to check if alive
   useEffect(() => {
-    fetch('http://localhost:8080/validate')
-      .then(r => r.ok ? setBackendAlive(true) : setBackendAlive(false))
-      .catch(() => { setBackendAlive(false); setUseMock(true); });
-  }, []);
+    let interval;
+    const pingBackend = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      try {
+        const r = await fetch(`${API_BASE}/validate`, { signal: controller.signal });
+        if (r.ok) {
+          setBackendStatus('Connected');
+          setBackendAlive(true);
+        } else {
+          setBackendStatus('Offline');
+          setBackendAlive(false);
+          if (!useMock) setUseMock(true);
+        }
+      } catch (err) {
+        setBackendStatus('Offline');
+        setBackendAlive(false);
+        if (!useMock) setUseMock(true);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+    
+    pingBackend();
+    interval = setInterval(pingBackend, 30000);
+    return () => clearInterval(interval);
+  }, [useMock]);
 
   const handleReset = async () => {
     setHistory([{ step: 0, reward: 0 }]);
@@ -67,7 +93,7 @@ export default function Dashboard() {
     }
 
     try {
-      const resp = await fetch('http://localhost:8080/reset', {
+      const resp = await fetch(`${API_BASE}/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id: activeTask })
@@ -110,7 +136,7 @@ export default function Dashboard() {
     }
 
     try {
-      const resp = await fetch('http://localhost:8080/step', {
+      const resp = await fetch(`${API_BASE}/step`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: act })
@@ -160,6 +186,30 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-screen text-sm overflow-hidden select-none">
+      
+      {/* Top Application Bar */}
+      <div className="bg-brand-bg/90 border-b border-brand-border h-12 flex justify-between items-center px-4 shrink-0 shadow-sm z-20">
+        <div className="flex items-center gap-3">
+          <Activity className="w-5 h-5 text-brand-teal" />
+          <span className="text-white font-sans font-medium uppercase tracking-widest text-sm">Supply Chain Matrix</span>
+        </div>
+        
+        {/* Connection Status Indicator */}
+        <div className="flex items-center gap-3 bg-brand-card border border-brand-border px-3 py-1.5 rounded pr-4 cursor-default">
+          <div className="relative flex h-3 w-3">
+            {backendStatus === 'Connected' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-teal opacity-75"></span>}
+            {backendStatus === 'Offline' && <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75"></span>}
+            <span className={`relative inline-flex rounded-full h-3 w-3 ${backendStatus === 'Connected' ? 'bg-brand-teal' : backendStatus === 'Offline' ? 'bg-brand-red' : 'bg-gray-500'}`}></span>
+          </div>
+          <div className="flex flex-col">
+            <span className={`text-[10px] font-bold uppercase tracking-widest leading-none mb-0.5 ${backendStatus === 'Connected' ? 'text-brand-teal' : backendStatus === 'Offline' ? 'text-brand-red' : 'text-gray-400'}`}>
+              {backendStatus}
+            </span>
+            <span className="text-[9px] font-mono text-gray-500 leading-none">{API_BASE}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Alert Strip Top Bar */}
       {sysState.disruptions && sysState.disruptions.length > 0 && (
         <div className="bg-brand-red/90 border-b border-brand-red text-white px-4 py-2 flex items-center gap-3 animate-slide-down shadow-lg shadow-brand-red/20 z-10 shrink-0">
@@ -264,8 +314,8 @@ export default function Dashboard() {
                 <span className="text-xs text-gray-500 uppercase">Total Score</span>
                 <span className="text-brand-amber font-bold">{((currentReward.total || 0) * 100).toFixed(0)}%</span>
               </div>
-              <div className="h-20 w-full mb-2" style={{ minHeight: '80px', minWidth: '100px' }}>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
+              <div className="w-full mb-2" style={{ height: 80 }}>
+                <ResponsiveContainer width="100%" height={80}>
                   <AreaChart data={history}>
                     <defs>
                       <linearGradient id="colorR" x1="0" y1="0" x2="0" y2="1">

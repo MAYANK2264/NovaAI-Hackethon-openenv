@@ -1,7 +1,7 @@
 ---
 title: Supply Chain Disruption Triage
 emoji: ⛓️
-colorFrom: teal
+colorFrom: blue
 colorTo: purple
 sdk: docker
 pinned: false

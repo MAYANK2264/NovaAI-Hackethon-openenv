@@ -23,6 +23,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tighten to your Vercel URL in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Global env instance (single-session; for multi-session use thread-local or session IDs)
 _env: Optional[SupplyChainEnv] = None
 
