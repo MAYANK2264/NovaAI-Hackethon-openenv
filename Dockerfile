@@ -17,9 +17,9 @@ COPY --chown=user . /app
 # Hard requirement: expose port 8080
 EXPOSE 8080
 
-# Hard requirement: include HEALTHCHECK
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/validate || exit 1
+# Native Python healthcheck (avoiding curl dependency in slim images)
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/validate')" || exit 1
 
 # Run server
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
