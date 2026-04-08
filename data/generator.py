@@ -21,16 +21,16 @@ SKUS = [
 ]
 
 SUPPLIER_TEMPLATES = [
-    {"name": "Apex Components Ltd",     "location": "Shenzhen, CN",   "cost_base": 12.5,  "lead": 7,  "rel": 0.95, "cap": 500},
-    {"name": "NordSupply GmbH",         "location": "Hamburg, DE",    "cost_base": 18.0,  "lead": 5,  "rel": 0.97, "cap": 300},
-    {"name": "PacificParts Co",         "location": "Osaka, JP",      "cost_base": 15.0,  "lead": 9,  "rel": 0.92, "cap": 400},
-    {"name": "Delta Sourcing Inc",      "location": "Dallas, TX",     "cost_base": 22.0,  "lead": 3,  "rel": 0.98, "cap": 250},
-    {"name": "Meridian Electronics",    "location": "Seoul, KR",      "cost_base": 14.0,  "lead": 8,  "rel": 0.93, "cap": 450},
-    {"name": "Atlas Industrial",        "location": "Mumbai, IN",     "cost_base": 10.5,  "lead": 11, "rel": 0.88, "cap": 600},
-    {"name": "Zenith Supply Chain",     "location": "Rotterdam, NL",  "cost_base": 19.5,  "lead": 4,  "rel": 0.96, "cap": 350},
-    {"name": "Coastal Components",      "location": "Taipei, TW",     "cost_base": 13.0,  "lead": 8,  "rel": 0.91, "cap": 480},
-    {"name": "Summit Manufacturing",    "location": "Toronto, CA",    "cost_base": 20.0,  "lead": 3,  "rel": 0.99, "cap": 200},
-    {"name": "Horizon Parts Ltd",       "location": "Bangalore, IN",  "cost_base": 11.0,  "lead": 12, "rel": 0.85, "cap": 700},
+    {"name": "Apex Components Ltd",     "location": "Shenzhen, CN",   "lat": 22.5431, "lng": 114.0579, "cost_base": 12.5,  "lead": 7,  "rel": 0.95, "cap": 500},
+    {"name": "NordSupply GmbH",         "location": "Hamburg, DE",    "lat": 53.5511, "lng": 9.9937,   "cost_base": 18.0,  "lead": 5,  "rel": 0.97, "cap": 300},
+    {"name": "PacificParts Co",         "location": "Osaka, JP",      "lat": 34.6937, "lng": 135.5023, "cost_base": 15.0,  "lead": 9,  "rel": 0.92, "cap": 400},
+    {"name": "Delta Sourcing Inc",      "location": "Dallas, TX",     "lat": 32.7767, "lng": -96.7970, "cost_base": 22.0,  "lead": 3,  "rel": 0.98, "cap": 250},
+    {"name": "Meridian Electronics",    "location": "Seoul, KR",      "lat": 37.5665, "lng": 126.9780, "cost_base": 14.0,  "lead": 8,  "rel": 0.93, "cap": 450},
+    {"name": "Atlas Industrial",        "location": "Mumbai, IN",     "lat": 19.0760, "lng": 72.8777,  "cost_base": 10.5,  "lead": 11, "rel": 0.88, "cap": 600},
+    {"name": "Zenith Supply Chain",     "location": "Rotterdam, NL",  "lat": 51.9225, "lng": 4.4792,   "cost_base": 19.5,  "lead": 4,  "rel": 0.96, "cap": 350},
+    {"name": "Coastal Components",      "location": "Taipei, TW",     "lat": 25.0330, "lng": 121.5654, "cost_base": 13.0,  "lead": 8,  "rel": 0.91, "cap": 480},
+    {"name": "Summit Manufacturing",    "location": "Toronto, CA",    "lat": 43.6510, "lng": -79.3470, "cost_base": 20.0,  "lead": 3,  "rel": 0.99, "cap": 200},
+    {"name": "Horizon Parts Ltd",       "location": "Bangalore, IN",  "lat": 12.9716, "lng": 77.5946,  "cost_base": 11.0,  "lead": 12, "rel": 0.85, "cap": 700},
 ]
 
 
@@ -49,6 +49,8 @@ def make_suppliers(rng: random.Random, num: int = 10) -> List[Supplier]:
             lead_time_days=t["lead"],
             reliability_score=t["rel"],
             available_skus=available,
+            lat=t["lat"],
+            lng=t["lng"]
         ))
     return suppliers
 

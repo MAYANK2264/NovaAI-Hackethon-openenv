@@ -1,6 +1,15 @@
 import random
 import copy
+import os
+import requests
 from typing import Optional, Dict
+
+try:
+    import yfinance as yf
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from env.models import (
     Observation, Action, StepResult, ResetResult,
@@ -35,6 +44,14 @@ TASK_CONFIGS = {
         "budget": 200000.0, 
         "total_budget": 200000.0,
         "description": "Simultaneous events: one bankrupt, one port closed, raw material shortage.",
+        "num_orders": 25,
+        "num_disruptions": 3
+    },
+    "task_live_realworld_crisis": {
+        "max_steps": 12, 
+        "budget": 250000.0, 
+        "total_budget": 250000.0,
+        "description": "LIVE WEB API MODE. Pinging yfinance, OpenWeather, and NewsAPI for live events.",
         "num_orders": 25,
         "num_disruptions": 3
     }
@@ -87,6 +104,45 @@ class SupplyChainEnv:
             d2 = DisruptionEvent(disruption_id="D-002", event_type="port_delay", affected_supplier_ids=[], affected_skus=[], severity="high", description="Rotterdam port closed", day_occurred=0, delay_days=12, price_multiplier=1.0)
             d3 = DisruptionEvent(disruption_id="D-003", event_type="price_spike", affected_supplier_ids=[], affected_skus=[], severity="high", description="Chip shortage", day_occurred=0, delay_days=0, price_multiplier=1.35)
             disruptions.extend([d2, d3])
+            
+        elif self.task_id == "task_live_realworld_crisis":
+            # 1. Finance (Copper Price Spike Checker)
+            try:
+                ticker = yf.Ticker("HG=F")
+                hist = ticker.history(period="5d")
+                if not hist.empty and len(hist) >= 2:
+                    change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2]
+                    pm = 1.0 + max(0, change * 15)  # Make it exaggerated for demo
+                    desc = f"Copper Futures live change: {(change*100):.1f}%"
+                    d1 = DisruptionEvent(disruption_id="D-LIVE-1", event_type="price_spike", affected_supplier_ids=[], affected_skus=["SKU-PCB-BASE", "SKU-CHIP-A1"], severity="high" if pm > 1.1 else "low", description=desc, day_occurred=0, delay_days=0, price_multiplier=pm)
+                    disruptions.append(d1)
+            except Exception as e:
+                pass
+                
+            # 2. Weather (Checking Shenzhen / Apex supplier)
+            ow_key = os.getenv("OPENWEATHER_API_KEY")
+            if ow_key:
+                try:
+                    r = requests.get(f"https://api.openweathermap.org/data/2.5/weather?lat=22.54&lon=114.05&appid={ow_key}").json()
+                    main_w = r.get("weather", [{}])[0].get("main", "Clear")
+                    if main_w not in ["Clear", "Clouds"]:
+                        self.obs.suppliers[0].is_disrupted = True
+                        disruptions.append(DisruptionEvent(disruption_id="D-LIVE-2", event_type="port_delay", affected_supplier_ids=[self.obs.suppliers[0].supplier_id], affected_skus=[], severity="high", description=f"Live Weather hit: {main_w} in Shenzhen", day_occurred=0, delay_days=4, price_multiplier=1.0))
+                except:
+                    pass
+            
+            # 3. News (Checking headlines)
+            news_key = os.getenv("NEWS_API_KEY")
+            if news_key:
+                try:
+                    r = requests.get(f"https://newsapi.org/v2/everything?q=factory+OR+strike+OR+disruption+OR+shortage&sortBy=publishedAt&apiKey={news_key}").json()
+                    if r.get("articles") and len(r["articles"]) > 0:
+                        headline = r["articles"][0]["title"]
+                        random_sup = self.obs.suppliers[self.rng.randint(2, 6)]
+                        random_sup.is_disrupted = True
+                        disruptions.append(DisruptionEvent(disruption_id="D-LIVE-3", event_type="supplier_failure", affected_supplier_ids=[random_sup.supplier_id], affected_skus=[], severity="critical", description=f"BREAKING: {headline[:65]}...", day_occurred=0, delay_days=0, price_multiplier=1.0))
+                except:
+                    pass
             
         self.obs.disruptions = disruptions
 

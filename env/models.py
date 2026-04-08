@@ -1,16 +1,12 @@
 """
 Typed models for the Supply Chain Disruption Triage environment.
-Uses stdlib dataclasses for zero-dependency portability.
-Production deployment can swap to Pydantic BaseModel with no logic changes.
+Strict Pydantic BaseModels for OpenEnv compliance.
 """
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict
-import copy
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class Supplier:
+class Supplier(BaseModel):
     supplier_id: str
     name: str
     location: str
@@ -19,15 +15,13 @@ class Supplier:
     lead_time_days: int
     reliability_score: float
     available_skus: List[str]
+    lat: float = 0.0
+    lng: float = 0.0
     is_disrupted: bool = False
     disruption_reason: Optional[str] = None
 
-    def dict(self):
-        return copy.copy(self.__dict__)
 
-
-@dataclass
-class PurchaseOrder:
+class PurchaseOrder(BaseModel):
     order_id: str
     sku: str
     quantity: int
@@ -35,15 +29,13 @@ class PurchaseOrder:
     original_supplier_id: str
     unit_cost: float
     current_supplier_id: Optional[str] = None
+    dest_lat: float = 34.0522
+    dest_lng: float = -118.2437
     status: str = "pending"   # pending | allocated | at_risk | cancelled | fulfilled
     priority: str = "normal"  # urgent | normal | deferrable
 
-    def dict(self):
-        return copy.copy(self.__dict__)
 
-
-@dataclass
-class DisruptionEvent:
+class DisruptionEvent(BaseModel):
     disruption_id: str
     event_type: str            # supplier_failure | port_delay | price_spike | shortage | bankruptcy
     affected_supplier_ids: List[str]
@@ -54,23 +46,15 @@ class DisruptionEvent:
     delay_days: int = 0
     price_multiplier: float = 1.0
 
-    def dict(self):
-        return copy.copy(self.__dict__)
 
-
-@dataclass
-class InventoryLevel:
+class InventoryLevel(BaseModel):
     sku: str
     current_stock: int
     safety_stock: int
     reorder_point: int
 
-    def dict(self):
-        return copy.copy(self.__dict__)
 
-
-@dataclass
-class Observation:
+class Observation(BaseModel):
     step: int
     task_id: str
     task_description: str
@@ -84,40 +68,29 @@ class Observation:
     days_elapsed: int
     stockout_risk_skus: List[str]
     done: bool = False
-    info: Dict = field(default_factory=dict)
-
-    def model_dump(self):
-        d = copy.copy(self.__dict__)
-        d['disruptions'] = [x.dict() for x in self.disruptions]
-        d['pending_orders'] = [x.dict() for x in self.pending_orders]
-        d['suppliers'] = [x.dict() for x in self.suppliers]
-        d['inventory'] = [x.dict() for x in self.inventory]
-        return d
+    info: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
 # Action types
 # ---------------------------------------------------------------------------
 
-@dataclass
-class ReallocationAction:
+class ReallocationAction(BaseModel):
     order_id: str
     new_supplier_id: str
     quantity: int
     priority: str = "normal"
 
 
-@dataclass
-class SplitOrderAction:
+class SplitOrderAction(BaseModel):
     order_id: str
     splits: List[ReallocationAction]
 
 
-@dataclass
-class Action:
-    reallocations: List[ReallocationAction] = field(default_factory=list)
-    cancel_orders: List[str] = field(default_factory=list)
-    split_orders: List[SplitOrderAction] = field(default_factory=list)
+class Action(BaseModel):
+    reallocations: List[ReallocationAction] = Field(default_factory=list)
+    cancel_orders: List[str] = Field(default_factory=list)
+    split_orders: List[SplitOrderAction] = Field(default_factory=list)
     reasoning: str = ""
 
 
@@ -125,60 +98,31 @@ class Action:
 # Reward
 # ---------------------------------------------------------------------------
 
-@dataclass
-class RewardBreakdown:
+class RewardBreakdown(BaseModel):
     stockout_avoidance: float
     cost_efficiency: float
     lead_time_score: float
     budget_adherence: float
 
-    def dict(self):
-        return copy.copy(self.__dict__)
 
-
-@dataclass
-class Reward:
+class Reward(BaseModel):
     total: float
     breakdown: RewardBreakdown
-    penalties: Dict[str, float] = field(default_factory=dict)
+    penalties: Dict[str, float] = Field(default_factory=dict)
     explanation: str = ""
-
-    def model_dump(self):
-        return {
-            'total': self.total,
-            'breakdown': self.breakdown.dict(),
-            'penalties': self.penalties,
-            'explanation': self.explanation,
-        }
 
 
 # ---------------------------------------------------------------------------
 # Step / Reset results
 # ---------------------------------------------------------------------------
 
-@dataclass
-class StepResult:
+class StepResult(BaseModel):
     observation: Observation
     reward: Reward
     done: bool
-    info: Dict = field(default_factory=dict)
-
-    def model_dump(self):
-        return {
-            'observation': self.observation.model_dump(),
-            'reward': self.reward.model_dump(),
-            'done': self.done,
-            'info': self.info,
-        }
+    info: Dict[str, Any] = Field(default_factory=dict)
 
 
-@dataclass
-class ResetResult:
+class ResetResult(BaseModel):
     observation: Observation
-    info: Dict = field(default_factory=dict)
-
-    def model_dump(self):
-        return {
-            'observation': self.observation.model_dump(),
-            'info': self.info,
-        }
+    info: Dict[str, Any] = Field(default_factory=dict)

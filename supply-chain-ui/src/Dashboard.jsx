@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import Globe from 'react-globe.gl';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   AlertTriangle, CheckCircle2, Activity, Clock, Box, ShieldAlert,
@@ -8,7 +9,8 @@ import {
 const TASKS = [
   { id: 'task_single_supplier_failure', label: 'Easy: Single Failure' },
   { id: 'task_port_congestion_cascade', label: 'Medium: Port Congestion' },
-  { id: 'task_multi_shock_crisis', label: 'Hard: Multi-Shock' }
+  { id: 'task_multi_shock_crisis', label: 'Hard: Multi-Shock' },
+  { id: 'task_live_realworld_crisis', label: '🔴 Live: Web API Data' }
 ];
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
@@ -40,9 +42,13 @@ const MOCK_STATE = {
 
 export default function Dashboard() {
   const [activeTask, setActiveTask] = useState(TASKS[0].id);
+  const [activeView, setActiveView] = useState('globe');
   const [useMock, setUseMock] = useState(false);
   const [sysState, setSysState] = useState(MOCK_STATE);
   const [history, setHistory] = useState([{ step: 0, reward: 0 }]);
+  const [globeSize, setGlobeSize] = useState({ width: 800, height: 600 });
+  const [countries, setCountries] = useState({ features: [] });
+  const containerRef = useRef(null);
   const [agentReasoning, setAgentReasoning] = useState("Agent initialized. Awaiting reset...");
   const [reasoningExpanded, setReasoningExpanded] = useState(true);
   const [autoRun, setAutoRun] = useState(false);
@@ -183,6 +189,94 @@ export default function Dashboard() {
   };
 
   const currentReward = sysState.reward || { breakdown: {} };
+
+  const arcsData = useMemo(() => {
+    return (sysState.pending_orders || []).map(po => {
+      const sup = sysState.suppliers?.find(s => s.supplier_id === po.current_supplier_id);
+      if (!sup) return null;
+      return {
+        startLat: sup.lat || 0,
+        startLng: sup.lng || 0,
+        endLat: po.dest_lat || 34.0522,
+        endLng: po.dest_lng || -118.2437,
+        color: ['rgba(0, 212, 170, 0)', po.status === 'at_risk' ? '#ff4444' : '#00d4aa'],
+        stroke: 1.5,
+      };
+    }).filter(Boolean);
+  }, [sysState.pending_orders, sysState.suppliers]);
+
+  const labelsData = useMemo(() => {
+    return (sysState.suppliers || []).map(sup => ({
+      lat: sup.lat || 0,
+      lng: sup.lng || 0,
+      text: sup.name,
+      color: sup.is_disrupted ? '#ff4444' : '#cbd5e1',
+      size: sup.is_disrupted ? 1.0 : 0.6,
+    }))
+  }, [sysState.suppliers]);
+
+  const floatingNodes = useMemo(() => {
+    return Array(60).fill().map(() => ({
+      lat: (Math.random() - 0.5) * 180,
+      lng: (Math.random() - 0.5) * 360,
+      text: '',
+      color: Math.random() > 0.5 ? 'rgba(234, 0, 217, 0.4)' : 'rgba(0, 229, 255, 0.4)',
+      size: 0.8,
+      altitude: Math.random() * 0.8 + 0.1
+    }));
+  }, []);
+
+  const mergedLabels = useMemo(() => {
+    return [
+      ...labelsData.map(l => ({ ...l, altitude: 0.05, size: 2.0 })), // Swelled data markers to pop
+      ...floatingNodes
+    ];
+  }, [labelsData, floatingNodes]);
+
+  const ringsData = useMemo(() => {
+    return (sysState.suppliers || []).filter(s => s.is_disrupted).map(sup => ({
+      lat: sup.lat || 0,
+      lng: sup.lng || 0,
+      color: '#ff4444',
+      maxR: 12,
+      propagationSpeed: 2,
+      repeatPeriod: 1000
+    }))
+  }, [sysState.suppliers]);
+
+  const globeEl = useRef();
+  
+  useEffect(() => {
+    if (globeEl.current) {
+      globeEl.current.controls().autoRotate = true;
+      globeEl.current.controls().autoRotateSpeed = 0.4;
+      // Lock center emphasis perfectly on India/Middle East
+      globeEl.current.pointOfView({ lat: 20, lng: 75, altitude: 2.2 });
+    }
+  }, [globeEl.current, activeView]);
+
+  useEffect(() => {
+    if (activeView === 'globe' && containerRef.current) {
+      const observer = new ResizeObserver(entries => {
+        if (entries[0]) {
+          setGlobeSize({
+            width: entries[0].contentRect.width,
+            height: entries[0].contentRect.height
+          });
+        }
+      });
+      observer.observe(containerRef.current);
+      return () => observer.disconnect();
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    // Explicit pinned unpkg URL for GeoJSON to ensure CORS resolves and the mesh renders
+    fetch('https://unpkg.com/globe.gl@2.30.0/example/datasets/ne_110m_admin_0_countries.geojson')
+      .then(res => res.json())
+      .then(data => setCountries(data))
+      .catch(err => console.error("Failed to load map data.", err));
+  }, []);
 
   return (
     <div className="flex flex-col h-screen text-sm overflow-hidden select-none">
@@ -343,15 +437,109 @@ export default function Dashboard() {
         </aside>
 
         {/* Center Panel - Main War Room */}
-        <section className="flex-1 flex flex-col min-w-0 border-r border-brand-border bg-brand-bg/50">
-          <div className="px-6 py-4 border-b border-brand-border shrink-0 flex justify-between items-center bg-brand-card/30">
-            <h2 className="text-xl font-bold font-sans tracking-tight">Active Purchase Orders</h2>
-            <div className="font-mono text-xs text-brand-teal bg-brand-teal/10 px-3 py-1 rounded-full border border-brand-teal/20">
-              {sysState.pending_orders?.length || 0} Open Tickets
-            </div>
+        <section className="flex-1 flex flex-col min-w-0 border-r border-brand-border bg-brand-bg/50 overflow-hidden relative">
+          
+          {/* Tab Navigation header */}
+          <div className="flex bg-brand-card/30 border-b border-brand-border shrink-0 z-20 shadow-md">
+            <button
+              onClick={() => setActiveView('globe')}
+              className={`flex-1 py-4 text-center font-sans tracking-tight font-bold text-base transition-colors duration-300 relative ${activeView === 'globe' ? 'text-brand-teal' : 'text-gray-500 hover:text-white'}`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                🌍 Global Interactive Map
+                {activeView === 'globe' && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-brand-teal shadow-[0_0_10px_rgba(0,212,170,0.8)]"></div>}
+              </div>
+            </button>
+            <div className="w-[1px] bg-brand-border/50"></div>
+            <button
+              onClick={() => setActiveView('triage')}
+              className={`flex-1 py-4 text-center font-sans tracking-tight font-bold text-base transition-colors duration-300 relative ${activeView === 'triage' ? 'text-brand-amber' : 'text-gray-500 hover:text-white'}`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Box className="w-5 h-5 pointer-events-none" /> Triage Op Center (POs)
+                {activeView === 'triage' && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-brand-amber shadow-[0_0_10px_rgba(255,183,77,0.8)]"></div>}
+              </div>
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
+           {activeView === 'globe' ? (
+            /* MASSIVE GLOBE 3D VIEW */
+            <div className="flex-1 min-h-0 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#0d1624] via-[#05080c] to-[#000000] overflow-hidden" ref={containerRef}>
+              <div className="absolute top-6 left-6 z-10 flex items-center gap-2 pointer-events-none">
+                <div className="w-2 h-2 rounded-full bg-brand-teal animate-pulse shadow-[0_0_8px_rgba(0,212,170,1)]"></div>
+                <div className="text-white font-mono font-bold text-xs tracking-widest uppercase drop-shadow-lg text-brand-teal/80">Sat-Link Active</div>
+              </div>
+              <div className="absolute inset-0 cursor-move overflow-hidden flex items-center justify-center">
+                {globeSize.width > 0 && (
+                  <Globe
+                    ref={globeEl}
+                    width={globeSize.width}
+                    height={globeSize.height}
+                    
+                    // Core Structure: Transparent Glass Core
+                    globeImageUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" // Pure transparent void
+                    backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+                    showAtmosphere={true}
+                    atmosphereColor="#0055ff" // Deep rich blue base glow
+                    atmosphereAltitude={0.4} // Huge bloom radius making it levitate
+                    backgroundColor="rgba(0,0,0,0)"
+
+                    // Continent Borders: Laser Sharp Pink Geography
+                    polygonsData={countries.features}
+                    polygonCapColor={() => 'rgba(0, 0, 0, 0.2)'} // Subtle dark glass interior
+                    polygonSideColor={() => 'rgba(0, 0, 0, 0)'}
+                    polygonStrokeColor={() => '#ea00d9'} // Unmistakable Magenta outline overriding geography
+                    polygonAltitude={0.015}
+
+                    // Network Mesh Layer (Continents replaced with massive pink connectivity dots)
+                    hexPolygonsData={countries.features}
+                    hexPolygonResolution={4} // Finer grid
+                    hexPolygonMargin={0.7} // Very shrunken so they form a dot matrix
+                    hexPolygonColor={() => 'rgba(255, 85, 179, 0.85)'} // Intensely bright tracking pink
+                    hexPolygonAltitude={0.02}
+                    
+                    // Cyber Web: Thick Volumetric Floating Lines
+                    arcsData={arcsData}
+                    arcColor={() => ['rgba(234, 0, 217, 0.6)', 'rgba(0, 229, 255, 1.0)']} // High contrast
+                    arcDashLength={0.4}
+                    arcDashGap={0.3}
+                    arcDashAnimateTime={2500}
+                    arcStroke={d => (d.stroke || 0.5) * 1.5} // Thicker, glowing arcs
+                    arcAltitudeAutoScale={0.5} // Pushed off the surface to float
+
+                    // Network Nodes & Floating Space Particles
+                    labelsData={mergedLabels}
+                    labelLat="lat"
+                    labelLng="lng"
+                    labelText="text"
+                    labelSize="size"
+                    labelDotRadius={1.0}
+                    labelColor="color"
+                    labelResolution={4}
+                    labelAltitude="altitude"
+
+                    // Disruption Rings
+                    ringsData={ringsData}
+                    ringColor={() => '#ea00d9'}
+                    ringMaxRadius={12}
+                    ringPropagationSpeed={2}
+                    ringRepeatPeriod={1000}
+                    ringResolution={64}
+                  />
+                )}
+              </div>
+            </div>
+          ) : (
+            /* TRIAGE PO DATA VIEW */
+            <div className="flex-1 min-h-0 flex flex-col pt-2 animate-fade-in bg-brand-bg/60">
+              <div className="px-6 py-4 flex justify-between items-center shrink-0">
+                <h2 className="text-xl font-bold font-sans tracking-tight">Active Purchase Orders Tracking</h2>
+                <div className="font-mono text-xs text-brand-amber bg-brand-amber/10 px-3 py-1 rounded-full border border-brand-amber/20 shadow-[0_0_10px_rgba(255,183,77,0.1)]">
+                  {sysState.pending_orders?.length || 0} Open Tickets
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2 space-y-3">
             {!sysState.pending_orders?.length ? (
               <div className="text-center text-gray-500 font-mono mt-20 opacity-50 flex flex-col items-center">
                 <Box className="w-12 h-12 mb-4" />
@@ -396,7 +584,9 @@ export default function Dashboard() {
                 </div>
               ))
             )}
-          </div>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Right Panel - Suppliers Directory */}
