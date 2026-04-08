@@ -30,14 +30,14 @@ from openai import OpenAI
 # Pre-submission Checklist Compliance
 # ---------------------------------------------------------------------------
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN") # Checklist: No default allowed for tokens
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
+API_KEY = os.environ.get("API_KEY") # OpenEnv validator injects this
 
-# OpenAI client initialization - we use this for the LLM mode
+# OpenAI client initialization - must use API_BASE_URL and API_KEY via the proxy
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=HF_TOKEN or "no-token",
+    api_key=API_KEY or "no-key-provided",
 )
 
 # Local environment server URL
@@ -180,7 +180,7 @@ def get_heuristic_action(obs: dict) -> dict:
 def run_episode(
     env: EnvClient,
     task_id: str,
-    mode: str = "heuristic"
+    mode: str = "llm"
 ) -> float:
     benchmark_name = "supply-chain-env"
     
@@ -199,7 +199,7 @@ def run_episode(
         steps_taken = step_num
         
         # Decide action based on mode
-        if mode == "llm" and HF_TOKEN:
+        if mode == "llm" and API_KEY:
             action = get_llm_action(obs)
         else:
             action = get_heuristic_action(obs)
@@ -239,7 +239,7 @@ def main():
                         choices=ALL_TASKS, help="Task to run")
     parser.add_argument("--all-tasks", action="store_true", help="Run all 3 tasks")
     parser.add_argument("--env-url", default=ENV_BASE_URL, help="Environment base URL")
-    parser.add_argument("--mode", choices=["heuristic", "llm"], default="heuristic", help="Agent mode")
+    parser.add_argument("--mode", choices=["heuristic", "llm"], default="llm", help="Agent mode")
     args = parser.parse_args()
 
     env = EnvClient(base_url=args.env_url)
