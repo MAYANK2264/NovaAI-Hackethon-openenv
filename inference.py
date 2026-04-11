@@ -47,6 +47,7 @@ ALL_TASKS = [
     "task_single_supplier_failure",
     "task_port_congestion_cascade",
     "task_multi_shock_crisis",
+    "task_live_realworld_crisis",
 ]
 
 # ---------------------------------------------------------------------------
