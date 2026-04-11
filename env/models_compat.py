@@ -17,6 +17,8 @@ class Supplier:
     lead_time_days: int
     reliability_score: float
     available_skus: List[str]
+    lat: float = 0.0
+    lng: float = 0.0
     is_disrupted: bool = False
     disruption_reason: Optional[str] = None
 
@@ -30,6 +32,8 @@ class PurchaseOrder:
     original_supplier_id: str
     unit_cost: float
     current_supplier_id: Optional[str] = None
+    dest_lat: float = 34.0522
+    dest_lng: float = -118.2437
     status: str = "pending"   # pending/allocated/at_risk/cancelled/fulfilled
     priority: str = "normal"  # urgent/normal/deferrable
 

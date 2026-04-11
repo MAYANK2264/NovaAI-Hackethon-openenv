@@ -146,7 +146,22 @@ class SupplyChainEnv:
                         disruptions.append(DisruptionEvent(disruption_id="D-LIVE-3", event_type="supplier_failure", affected_supplier_ids=[random_sup.supplier_id], affected_skus=[], severity="critical", description=f"BREAKING: {headline[:65]}...", day_occurred=0, delay_days=0, price_multiplier=1.0))
                 except:
                     pass
-            
+            # 4. Fallback (Ensures compliance if no API keys or no live events)
+            if len(disruptions) == 0:
+                sup = self.obs.suppliers[self.rng.randint(0, 5)]
+                disruptions.append(DisruptionEvent(
+                    disruption_id="D-MOCK-CYBER",
+                    event_type="supplier_failure",
+                    affected_supplier_ids=[sup.supplier_id],
+                    affected_skus=[],
+                    severity="high",
+                    description="MOCK CRISIS: Regional cyber attack detected on ERP systems.",
+                    day_occurred=0,
+                    delay_days=10,
+                    price_multiplier=1.1
+                ))
+                sup.is_disrupted = True
+                
         self.obs.disruptions = disruptions
 
         dids = {sid for d in self.obs.disruptions for sid in d.affected_supplier_ids}

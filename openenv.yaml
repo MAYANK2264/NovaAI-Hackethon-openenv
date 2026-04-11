@@ -99,6 +99,14 @@ tasks:
       Simultaneous events: one supplier bankrupt, one port closed, raw
       material shortage, and a 35% price spike. 20+ orders affected.
       Optimize under hard budget and lead time constraints.
+  - id: task_live_realworld_crisis
+    name: Real-world live crisis
+    difficulty: hard
+    description: >
+      LIVE WEB API MODE. Uses real-time data from yfinance (commodities),
+      OpenWeather (logistics hubs), and NewsAPI (global event detection).
+      Requires external API keys for full functionality.
+
 
 endpoints:
   reset: POST /reset

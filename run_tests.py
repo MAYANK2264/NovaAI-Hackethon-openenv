@@ -8,17 +8,22 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 # Monkey-patch env.models to use stdlib dataclass version
 import env.models_compat as _m
-import env.models as _real
-# replace attributes in the real module namespace
-for attr in dir(_m):
-    if not attr.startswith('__'):
-        setattr(_real, attr, getattr(_m, attr))
+try:
+    import env.models as _real
+    # replace attributes in the real module namespace
+    for attr in dir(_m):
+        if not attr.startswith('__'):
+            setattr(_real, attr, getattr(_m, attr))
+except ImportError:
+    # If pydantic is broken, we inject our compat models into sys.modules
+    sys.modules['env.models'] = _m
+    _real = _m
 
 from env.environment import SupplyChainEnv, TASK_CONFIGS
 from graders.graders import grade, GRADERS
 
-PASS = "\033[92m✓\033[0m"
-FAIL = "\033[91m✗\033[0m"
+PASS = "[PASS]"
+FAIL = "[FAIL]"
 results = []
 
 def check(name, condition, detail=""):
@@ -30,12 +35,12 @@ def check(name, condition, detail=""):
     results.append(condition)
     return condition
 
-print("\n══════════════════════════════════════════")
-print("  Supply Chain OpenEnv — Test Suite")
-print("══════════════════════════════════════════\n")
+print("\n==========================================")
+print("  Supply Chain OpenEnv --- Test Suite")
+print("==========================================\n")
 
 for task_id in TASK_CONFIGS:
-    print(f"── Task: {task_id}")
+    print(f"-- Task: {task_id}")
 
     env = SupplyChainEnv(task_id)
     cfg = TASK_CONFIGS[task_id]
@@ -157,16 +162,16 @@ for task_id in TASK_CONFIGS:
     envB = SupplyChainEnv(task_id)
     idsA = sorted(o.order_id for o in envA.reset().observation.pending_orders)
     idsB = sorted(o.order_id for o in envB.reset().observation.pending_orders)
-    check("deterministic: same seed → same order IDs", idsA == idsB)
+    check("deterministic: same seed -> same order IDs", idsA == idsB)
 
     # 12. Double reset produces clean state
     env6 = SupplyChainEnv(task_id)
     env6.reset()
     env6.step(_real.Action())
     env6.reset()
-    check("double reset → step==0", env6.state().step == 0)
+    check("double reset -> step==0", env6.state().step == 0)
 
-    # ── Grader ──
+    # -- Grader --
     print(f"\n  Grader: {task_id}")
 
     check("grader exists", task_id in GRADERS)
@@ -226,8 +231,8 @@ for task_id in TASK_CONFIGS:
 total = len(results)
 passed = sum(results)
 failed = total - passed
-print("══════════════════════════════════════════")
+print("==========================================")
 print(f"  Results: {passed}/{total} passed  |  {failed} failed")
-print("══════════════════════════════════════════")
+print("==========================================")
 if failed:
     sys.exit(1)

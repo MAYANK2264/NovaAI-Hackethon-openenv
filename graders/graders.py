@@ -22,31 +22,38 @@ class GradeResult(BaseModel):
 
 def grade(task_id: str, obs: Observation) -> GradeResult:
     """
-    Uniform grader implementation.
+    Uniform multi-objective grader.
+    - Stockout avoidance (40%): How many affected orders were rerouted?
+    - Cost efficiency (30%): Spend relative to budget.
+    - Lead time (20%): Deliveries within requirements.
+    - Budget constraints (10%): No budget overruns.
     """
     notes = []
     penalties = 0.0
     
+    # Identify disrupted suppliers
+    disrupted_sids = set()
+    for d in obs.disruptions:
+        disrupted_sids.update(d.affected_supplier_ids)
+    
     # 1. Stockout Avoidance (40%)
-    # Resolve at-risk SKUs
-    total_risk_skus = len(obs.stockout_risk_skus)
-    # In simplified logic, we check how many at-risk orders were reallocated to valid suppliers
-    at_risk_orders = [o for o in obs.pending_orders if o.status == "at_risk"]
-    resolved_orders = [o for o in obs.pending_orders if o.status == "allocated" and o.current_supplier_id is not None]
+    # Orders are 'at_risk' if their original_supplier is disrupted.
+    # They are 'resolved' if they are now allocated to a non-disrupted supplier.
+    at_risk_orders = [o for o in obs.pending_orders if o.original_supplier_id in disrupted_sids]
+    resolved_orders = [o for o in at_risk_orders if o.status == "allocated" and o.current_supplier_id not in disrupted_sids]
     
     stockout_score = 1.0
     if at_risk_orders:
-        stockout_score = len(resolved_orders) / (len(at_risk_orders) + len(resolved_orders))
-    notes.append(f"Stockout avoidance: {stockout_score:.2f}")
+        stockout_score = len(resolved_orders) / len(at_risk_orders)
+    notes.append(f"Stockout avoidance: {stockout_score:.2f} ({len(resolved_orders)}/{len(at_risk_orders)} resolved)")
 
     # 2. Cost Efficiency (30%)
-    # Ratio of current cost vs total budget
+    # spend <= total_budget
     total_cost = sum(o.unit_cost * o.quantity for o in obs.pending_orders if o.status != "cancelled")
     cost_score = max(0.0, 1.0 - (total_cost / obs.total_budget)) if obs.total_budget > 0 else 1.0
     notes.append(f"Cost efficiency: {cost_score:.2f}")
 
     # 3. Lead Time (20%)
-    # Percentage of orders with supplier lead time <= required_by_day
     supplier_map = {s.supplier_id: s for s in obs.suppliers}
     correct_lt = 0
     fulfilled = [o for o in obs.pending_orders if o.current_supplier_id in supplier_map]
@@ -63,17 +70,15 @@ def grade(task_id: str, obs: Observation) -> GradeResult:
     notes.append(f"Budget compliance: {budget_score:.2f}")
 
     # Penalties
-    # (These would typically be detected during the step() function and passed in info)
-    # But we can check some here
     for o in obs.pending_orders:
         if o.current_supplier_id:
             sup = supplier_map.get(o.current_supplier_id)
             if not sup:
-                penalties += 0.1 # invalid supplier
+                penalties += 0.05 # invalid supplier
             elif sup.is_disrupted:
-                penalties += 0.2 # disrupted supplier
+                penalties += 0.1 # reallocated to disrupted supplier
             elif o.sku not in sup.available_skus:
-                penalties += 0.1 # SKU mismatch
+                penalties += 0.05 # SKU mismatch
 
     final_score = (
         stockout_score * 0.40 +
@@ -97,6 +102,7 @@ def grade(task_id: str, obs: Observation) -> GradeResult:
         },
         notes=notes
     )
+
 
 
 GRADERS = {
